@@ -13,12 +13,14 @@ type Name struct {
 
 func main() {
 
-	http.HandleFunc("/nome", metodoPegar)
-	http.HandleFunc("/nome", metodoAdicionar)
+	http.HandleFunc("/nome", metodoVer)
+	http.HandleFunc("/nome/novoNome", metodoAdicionar)
+	http.HandleFunc("/nome/outroNome", metodoUpdate)
+
 	http.ListenAndServe(":8000", nil)
 }
 
-func metodoPegar(w http.ResponseWriter, r *http.Request) {
+func metodoVer(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodGet {
 		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
@@ -95,4 +97,53 @@ func metodoAdicionar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
+}
+
+func metodoUpdate(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodPut {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	file, err := os.OpenFile("Nome.json", os.O_RDWR|os.O_CREATE, 0644)
+
+	var names []Name
+
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
+		return
+	}
+
+	defer file.Close()
+
+	err = json.NewDecoder(file).Decode(&names)
+
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
+		return
+	}
+
+	var procurado Name
+	var novoNome string
+
+	err = json.NewDecoder(r.Body).Decode(&procurado)
+
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler corpo", http.StatusBadRequest)
+		return
+	}
+
+	for i, v := range names {
+		if v.Nome == procurado.Nome {
+			names[i].Nome = novoNome
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	file.Truncate(0)
+	file.Seek(0, 0)
+	json.NewEncoder(file).Encode(names)
 }
