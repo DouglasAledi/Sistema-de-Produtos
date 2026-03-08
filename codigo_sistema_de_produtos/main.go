@@ -147,3 +147,50 @@ func metodoUpdate(w http.ResponseWriter, r *http.Request) {
 	file.Seek(0, 0)
 	json.NewEncoder(file).Encode(names)
 }
+
+func metodoDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	file, err := os.OpenFile("Nome.json", os.O_RDWR|os.O_CREATE, 0644)
+
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
+		return
+	}
+
+	defer file.Close()
+
+	var names []Name
+	var procurado Name
+
+	err = json.NewDecoder(file).Decode(&names)
+
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler corpo", http.StatusBadRequest)
+		return
+	}
+
+	err = json.NewDecoder(r.Body).Decode(&procurado)
+
+	if err != nil {
+		http.Error(w, "Erro ao ler corpo", http.StatusBadRequest)
+		return
+	}
+
+	for i, v := range names {
+		if v.Nome == procurado.Nome {
+			names = append(names[:i], names[i+1:]...)
+			break
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	file.Truncate(0)
+	file.Seek(0, 0)
+	json.NewEncoder(file).Encode(names)
+}
