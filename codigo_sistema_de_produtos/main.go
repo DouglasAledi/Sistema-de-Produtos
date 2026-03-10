@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+
+	"github.com/gorilla/mux"
 )
 
 type Name struct {
@@ -13,11 +15,14 @@ type Name struct {
 
 func main() {
 
-	http.HandleFunc("/nome", metodoVer)
-	http.HandleFunc("/nome/novoNome", metodoAdicionar)
-	http.HandleFunc("/nome/outroNome", metodoUpdate)
+	r := mux.NewRouter()
 
-	http.ListenAndServe(":8000", nil)
+	r.HandleFunc("/nome/{nome}", metodoVer).Methods("GET")
+	r.HandleFunc("/nome", metodoAdicionar).Methods("POST")
+	r.HandleFunc("/nome/{nome}", metodoUpdate).Methods("PUT")
+	r.HandleFunc("/nome/{nome}", metodoDelete).Methods("DELETE")
+
+	http.ListenAndServe(":8000", r)
 }
 
 func metodoVer(w http.ResponseWriter, r *http.Request) {
