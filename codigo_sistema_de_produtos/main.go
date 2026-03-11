@@ -17,7 +17,8 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/nome/{nome}", metodoVer).Methods("GET")
+	r.HandleFunc("/nome", metodoVerNomes).Methods("GET")
+	r.HandleFunc("/nome/{nome}", metodoVerNome).Methods("GET")
 	r.HandleFunc("/nome", metodoAdicionar).Methods("POST")
 	r.HandleFunc("/nome/{nome}", metodoUpdate).Methods("PUT")
 	r.HandleFunc("/nome/{nome}", metodoDelete).Methods("DELETE")
@@ -25,7 +26,7 @@ func main() {
 	http.ListenAndServe(":8000", r)
 }
 
-func metodoVer(w http.ResponseWriter, r *http.Request) {
+func metodoVerNomes(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodGet {
 		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
@@ -53,6 +54,45 @@ func metodoVer(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	json.NewEncoder(w).Encode(names)
+}
+
+func metodoVerNome(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	vars := mux.Vars(r)
+	nome := vars["nome"]
+
+	var names []Name
+
+	file, err := os.OpenFile("Nome.json", os.O_RDONLY|os.O_CREATE, 0644)
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
+		return
+	}
+
+	defer file.Close()
+
+	err = json.NewDecoder(file).Decode(&names)
+
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
+		return
+	}
+
+	for _, v := range names {
+		if v.Nome == nome {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+
+			json.NewEncoder(w).Encode(v)
+			return
+		}
+	}
+	http.Error(w, "Nome não encontrado", http.StatusNotFound)
 }
 
 func metodoAdicionar(w http.ResponseWriter, r *http.Request) {
