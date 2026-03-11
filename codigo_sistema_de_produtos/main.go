@@ -16,13 +16,11 @@ type Name struct {
 func main() {
 
 	r := mux.NewRouter()
-
 	r.HandleFunc("/nome", metodoVerNomes).Methods("GET")
 	r.HandleFunc("/nome/{nome}", metodoVerNome).Methods("GET")
 	r.HandleFunc("/nome", metodoAdicionar).Methods("POST")
 	r.HandleFunc("/nome/{nome}", metodoUpdate).Methods("PUT")
 	r.HandleFunc("/nome/{nome}", metodoDelete).Methods("DELETE")
-
 	http.ListenAndServe(":8000", r)
 }
 
