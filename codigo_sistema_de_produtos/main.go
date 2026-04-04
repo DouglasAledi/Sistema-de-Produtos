@@ -16,20 +16,35 @@ type Name struct {
 func main() {
 
 	r := mux.NewRouter()
-	r.HandleFunc("/nome", metodoVerNomes).Methods("GET")
-	r.HandleFunc("/nome/{nome}", metodoVerNome).Methods("GET")
-	r.HandleFunc("/nome", metodoAdicionar).Methods("POST")
-	r.HandleFunc("/nome/{nome}", metodoUpdate).Methods("PUT")
-	r.HandleFunc("/nome/{nome}", metodoDelete).Methods("DELETE")
+	r.HandleFunc("/nome", metodo).Methods("GET")
+	r.HandleFunc("/nome/{nome}", metodo).Methods("GET")
+	r.HandleFunc("/nome", metodo).Methods("POST")
+	r.HandleFunc("/nome/{nome}", metodo).Methods("PUT")
+	r.HandleFunc("/nome/{nome}", metodo).Methods("DELETE")
 	http.ListenAndServe(":8000", r)
 }
 
-func metodoVerNomes(w http.ResponseWriter, r *http.Request) {
+func metodo(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	nome := vars["nome"]
 
-	if r.Method != http.MethodGet {
-		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
-		return
+	switch r.Method {
+	case http.MethodGet:
+		if nome != "" {
+			metodoVerNome(w, r)
+		} else {
+			metodoVerNomes(w, r)
+		}
+	case http.MethodPost:
+		metodoAdicionar(w, r)
+	case http.MethodDelete:
+		metodoDelete(w, r)
+	case http.MethodPut:
+		metodoUpdate(w, r)
 	}
+}
+
+func metodoVerNomes(w http.ResponseWriter, r *http.Request) {
 
 	var names []Name
 
@@ -55,11 +70,6 @@ func metodoVerNomes(w http.ResponseWriter, r *http.Request) {
 }
 
 func metodoVerNome(w http.ResponseWriter, r *http.Request) {
-
-	if r.Method != http.MethodGet {
-		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
-		return
-	}
 
 	vars := mux.Vars(r)
 	nome := vars["nome"]
@@ -95,27 +105,23 @@ func metodoVerNome(w http.ResponseWriter, r *http.Request) {
 
 func metodoAdicionar(w http.ResponseWriter, r *http.Request) {
 
-	if r.Method != http.MethodPost {
-		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+	file, err := os.OpenFile("Nome.json", os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		http.Error(w, "Erro ao abrir arquivo", http.StatusInternalServerError)
 		return
 	}
-
-	file, err := os.OpenFile("Nome.json", os.O_RDWR|os.O_CREATE, 0644)
 
 	var names []Name
 
+	defer file.Close()
+
 	if err != nil && err != io.EOF {
-		http.Error(w, "Erro ao ler o arquivo", http.StatusInternalServerError)
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
 		return
 	}
 
-	defer file.Close()
-
-	err = json.NewDecoder(file).Decode(&names)
-
-	if err != nil {
-		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
-		return
+	if names == nil {
+		names = []Name{}
 	}
 
 	var novo Name
@@ -139,63 +145,18 @@ func metodoAdicionar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer r.Body.Close()
+	defer file.Close()
+
 	w.WriteHeader(http.StatusCreated)
 }
 
 func metodoUpdate(w http.ResponseWriter, r *http.Request) {
 
-	if r.Method != http.MethodPut {
-		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
-		return
-	}
+	defer r.Body.Close()
 
-	file, err := os.OpenFile("Nome.json", os.O_RDWR|os.O_CREATE, 0644)
-
-	var names []Name
-
-	if err != nil && err != io.EOF {
-		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
-		return
-	}
-
-	defer file.Close()
-
-	err = json.NewDecoder(file).Decode(&names)
-
-	if err != nil && err != io.EOF {
-		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
-		return
-	}
-
-	var procurado Name
-	var novoNome string
-
-	err = json.NewDecoder(r.Body).Decode(&procurado)
-
-	if err != nil && err != io.EOF {
-		http.Error(w, "Erro ao ler corpo", http.StatusBadRequest)
-		return
-	}
-
-	for i, v := range names {
-		if v.Nome == procurado.Nome {
-			names[i].Nome = novoNome
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	file.Truncate(0)
-	file.Seek(0, 0)
-	json.NewEncoder(file).Encode(names)
-}
-
-func metodoDelete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
-		return
-	}
+	vars := mux.Vars(r)
+	nomeAntigo := vars["nome"]
 
 	file, err := os.OpenFile("Nome.json", os.O_RDWR|os.O_CREATE, 0644)
 
@@ -207,33 +168,88 @@ func metodoDelete(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	var names []Name
-	var procurado Name
 
 	err = json.NewDecoder(file).Decode(&names)
 
 	if err != nil && err != io.EOF {
-		http.Error(w, "Erro ao ler corpo", http.StatusBadRequest)
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
 		return
 	}
 
-	err = json.NewDecoder(r.Body).Decode(&procurado)
+	var novo Name
+
+	err = json.NewDecoder(r.Body).Decode(&novo)
 
 	if err != nil {
 		http.Error(w, "Erro ao ler corpo", http.StatusBadRequest)
 		return
 	}
 
+	encontrado := false
+
 	for i, v := range names {
-		if v.Nome == procurado.Nome {
-			names = append(names[:i], names[i+1:]...)
+		if v.Nome == nomeAntigo {
+			names[i].Nome = novo.Nome
+			encontrado = true
 			break
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	if !encontrado {
+		http.Error(w, "Nome não encontrado", http.StatusNotFound)
+		return
+	}
 
 	file.Truncate(0)
 	file.Seek(0, 0)
 	json.NewEncoder(file).Encode(names)
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func metodoDelete(w http.ResponseWriter, r *http.Request) {
+
+	vars := mux.Vars(r)
+	nome := vars["nome"]
+
+	file, err := os.OpenFile("Nome.json", os.O_RDWR|os.O_CREATE, 0644)
+
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	var names []Name
+
+	err = json.NewDecoder(file).Decode(&names)
+
+	if err != nil && err != io.EOF {
+		http.Error(w, "Erro ao ler JSON", http.StatusInternalServerError)
+		return
+	}
+
+	encontrado := false
+
+	for i, v := range names {
+		if v.Nome == nome {
+			names = append(names[:i], names[i+1:]...)
+			encontrado = true
+			break
+		}
+	}
+
+	if !encontrado {
+		http.Error(w, "Nome não encontrado", http.StatusNotFound)
+		return
+	}
+
+	file.Truncate(0)
+	file.Seek(0, 0)
+	json.NewEncoder(file).Encode(names)
+
+	w.WriteHeader(http.StatusOK)
+
+	w.Write([]byte("Deletado com sucesso"))
+
 }
